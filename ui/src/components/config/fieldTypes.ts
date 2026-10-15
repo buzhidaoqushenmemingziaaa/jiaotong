@@ -11,6 +11,8 @@
  *  - C 只做 "type → 控件" 的查表渲染，未知 type 一律只读兜底
  */
 
+import type { FormRules } from 'element-plus'
+
 // ---------- 字段定义（与后端 describe_config 对齐） ----------
 
 /** 契约中出现的 type 字符串字面量（mock 已见 list[str]/int，其余按契约与设计稿推断） */
@@ -141,4 +143,40 @@ export function numberPropsOf(field: FieldDef) {
 /** 字段说明文案（兼容 doc/desc 两种命名） */
 export function docOf(field: FieldDef): string {
   return field.doc ?? field.desc ?? ''
+}
+
+// ---------- 3.5：校验规则自动生成 ----------
+
+/**
+ * 由 schema 生成 el-form 校验规则（key = 点分路径，与 el-form-item 的 prop 对齐）。
+ *
+ * ★ 边界（契约 §1.5）："C 不许实现任何校验逻辑。校验是引擎的 validate.py"。
+ *   这里只生成「表单能不能提交」这一层的最低要求 —— 必填性，
+ *   业务规则（约束冲突、可行域）一律不碰，归引擎。
+ *   范围限制交给 el-input-number 的 min/max（控件层属性，见 numberPropsOf），
+ *   枚举限制交给 el-select（只能从 enum 里选），两者都不是"校验逻辑"。
+ *   提示文案复用后端给的 label，不新编业务中文。
+ */
+export function buildRules(fields: FieldDef[]): FormRules {
+  const rules: FormRules = {}
+
+  for (const f of fields) {
+    if (f.editable === false) continue // 引擎派生的只读字段不校验
+    if (!f.required) continue
+
+    // ★ list 类必须显式声明 type:'array'，否则空数组 [] 会被 required 判为"已填写"。
+    //   这是 async-validator 的行为：required 只把 undefined/null/'' 视为空。
+    const isList = f.type.startsWith('list[')
+
+    rules[f.key] = [
+      {
+        ...(isList ? { type: 'array' as const } : {}),
+        required: true,
+        message: `${f.label} 为必填项`,
+        trigger: ['blur', 'change'],
+      },
+    ]
+  }
+
+  return rules
 }

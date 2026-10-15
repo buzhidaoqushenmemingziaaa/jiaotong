@@ -23,14 +23,14 @@
   |---|---|---|---|---|
   | 1 | 工程脚手架（Vue3 + Vite + Element Plus + 路由 + 布局） | 1.5 | ●○○ | 有现成 admin 模板可省一半 |
   | 2 | 接口层封装 + 接 Mock | 0.5 | ●○○ | 8 个端点，很简单 |
-  | 3 | **参数配置页（schema 驱动表单）** | **2.5** | **●●○** | 动态表单 + 分组 + 校验。**比看起来难** |
+  | 3 | **参数配置页（schema 驱动表单）** | **2.5** | **●●○ ✅** | 动态表单 + 分组 + 校验。**比看起来难**（3.1~3.7 七小步全部完成） |
   | 3.1 | └─ 拉 schema + 类型→控件映射表 | 0.3 | ✅ | 产出 `ui/src/components/config/fieldTypes.ts`：8 种 type→控件映射 + FieldDef 类型 + 默认值工厂 |
-  | 3.2 | └─ `FieldRenderer.vue` 控件组件 | 0.5 | ⬜ | 单字段渲染：InputNumber/Switch/Select/Input + unit 后缀 + doc tooltip + editable 禁用 |
-  | 3.3 | └─ 分组布局（el-collapse / el-card） | 0.3 | ⬜ | 按 `groups` 渲染，每组标题 + 栅格 |
-  | 3.4 | └─ Pinia store + 默认值初始化 | 0.4 | ⬜ | `formData` 双向绑定，从算例或 schema 默认值初始化 |
-  | 3.5 | └─ 校验规则自动生成 | 0.4 | ⬜ | `required` + `type` → el-form rules，提交前全量校验 |
-  | 3.6 | └─ 提交 `/api/config/validate` + 错误提示 | 0.4 | ⬜ | dry-run；错误码 → `/api/meta/errors` 中文映射展示 |
-  | 3.7 | └─ 浏览器自测一遍 | 0.2 | ⬜ | 跑通"改字段 → 校验 → 提交"闭环 |
+  | 3.2 | └─ `FieldRenderer.vue` 控件组件 | 0.5 | ✅ | 产出 `FieldRenderer.vue`：8 分支配表渲染 + unit 后缀 + doc tooltip + editable 只读；浏览器实测 7 项全通过 |
+  | 3.3 | └─ 分组布局（el-collapse / el-card） | 0.3 | ✅ | `ConfigView.vue` 改为 el-collapse 分组面板 + el-row/el-col 栅格；列表字段整行、标量两列；浏览器实测通过 |
+  | 3.4 | └─ Pinia store + 默认值初始化 | 0.4 | ✅ | 产出 `stores/config.ts`：点分 key ↔ 嵌套 config 转换 + schema 默认值初始化 + 保留 `_` 说明键；浏览器实测嵌套结构/切页保活均通过 |
+  | 3.5 | └─ 校验规则自动生成 | 0.4 | ✅ | `fieldTypes.ts` 加 `buildRules()`：required + list 显式 `type:'array'`（堵空数组漏洞）；ConfigView 加全量校验按钮；浏览器实测空数组被拦、补全后通过 |
+  | 3.6 | └─ 提交 `/api/config/validate` + 错误提示 | 0.4 | ✅ | store 加 `loadErrors()/errorText()` 查表（弃用回包 message）；ConfigView 两关校验 + 错误表格；实测本地拦截不发请求、提交后绿色通过。★盲区：引擎报错表格在当前 mock 下不可达（其唯一错误码与本地必填重叠），留待联调回归 |
+  | 3.7 | └─ 浏览器自测一遍 | 0.2 | ✅ | 闭环自测通过：首次渲染、必填拦截、切页保活（截图证「徐家汇」标签仍在）、控制台无报错；提交链路在 3.6 收尾轮已证；调试卡片已移除。|
   | 4 | 求解页（异步 + 轮询 + 日志） | 1.5 | ●●○ | 异步流程要理清 |
   | 5 | 结果总览（KPI 卡片） | 0.5 | ●○○ | |
   | 6 | **列车运行动画** | **3.0** | **●●●** | ★ **最难的一项**，见 §3 |
