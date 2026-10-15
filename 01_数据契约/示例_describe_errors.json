@@ -1,0 +1,5 @@
+{
+  "E_CONFIG_MISSING": "配置缺少必填字段",
+  "E_INFEASIBLE": "约束冲突，无可行解",
+  "E_TIMEOUT": "求解超时"
+}

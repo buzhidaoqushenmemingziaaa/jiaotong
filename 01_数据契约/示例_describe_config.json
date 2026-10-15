@@ -1,0 +1,35 @@
+{
+  "groups": [
+    {
+      "id": "line",
+      "title": "接口一：线路参数",
+      "fields": [
+        {
+          "key": "line.stations",
+          "label": "车站列表",
+          "type": "list[str]",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "scenario",
+      "title": "接口四：运营与场景参数",
+      "fields": [
+        {
+          "key": "scenario.horizon_steps",
+          "label": "时段步数",
+          "type": "int",
+          "required": true
+        },
+        {
+          "key": "scenario.decision_period_min",
+          "label": "决策周期(min)",
+          "type": "int",
+          "required": true,
+          "default": 15
+        }
+      ]
+    }
+  ]
+}
