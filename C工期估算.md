@@ -31,7 +31,13 @@
   | 3.5 | └─ 校验规则自动生成 | 0.4 | ✅ | `fieldTypes.ts` 加 `buildRules()`：required + list 显式 `type:'array'`（堵空数组漏洞）；ConfigView 加全量校验按钮；浏览器实测空数组被拦、补全后通过 |
   | 3.6 | └─ 提交 `/api/config/validate` + 错误提示 | 0.4 | ✅ | store 加 `loadErrors()/errorText()` 查表（弃用回包 message）；ConfigView 两关校验 + 错误表格；实测本地拦截不发请求、提交后绿色通过。★盲区：引擎报错表格在当前 mock 下不可达（其唯一错误码与本地必填重叠），留待联调回归 |
   | 3.7 | └─ 浏览器自测一遍 | 0.2 | ✅ | 闭环自测通过：首次渲染、必填拦截、切页保活（截图证「徐家汇」标签仍在）、控制台无报错；提交链路在 3.6 收尾轮已证；调试卡片已移除。|
-  | 4 | 求解页（异步 + 轮询 + 日志） | 1.5 | ●●○ | 异步流程要理清 |
+  | 4 | 求解页（异步 + 轮询 + 日志） | 1.5 | ●●○ ✅ | 异步流程要理清（4.1~4.6 六小步全部完成） |
+  | 4.1 | └─ solve store + 任务状态机 | 0.3 | ✅ | 产出 `stores/solve.ts`：idle→running→done/failed 状态机 + task_id/progress/stage/logs 状态 + 提交 `/api/solve` 动作（带 case/peak/time_limit_s）；状态转换收敛于 submit/applySnapshot/reset 三处，done 时结果落 store |
+  | 4.2 | └─ 轮询器封装 | 0.3 | ✅ | 轮询器内置 `stores/solve.ts`：setTimeout 递归约 1s 一跳，done/failed 即止，polling 开关防重入，连错 3 次判 failed 防 mock 重启空转；卸载停/回页续路径写明；mock `--delay 4` 实测 progress 0.2→1.0、done 带 summary+timeseries |
+  | 4.3 | └─ 提交区表单 | 0.2 | ✅ | `SolveView.vue`：算例下拉（`/api/cases`，默认首项）+ peak 单选（选算例自动同步防错配）+ time_limit 输入 + 运行按钮（running 禁用）；卸载停/回页续轮询已接线；浏览器实测 6 项全过（默认态、下拉 3 算例、peak 联动、提交禁用、done 恢复、console 无 error） |
+  | 4.4 | └─ 进度条 + 日志面板 | 0.3 | ✅ | `SolveView.vue` 加运行进度卡（非 idle 即显示）：el-progress + stage 文本，running striped-flow / done 绿 / failed 红；日志区黑底等宽字体，watch logs 长度 nextTick 滚底；mock `--delay 6` 实测百分比递增、阶段流转、done 100% 绿条 + 5 行日志、console 无 error |
+  | 4.5 | └─ 完成/失败收尾 | 0.2 | ✅ | done：摘要卡直出 objective/solve_time_s + 跳结果总览 + 重新求解（结果数据 4.1 已落 store）；failed：messages 经 `describe_errors` 查表渲染（复用 config store errorText）；实测：done 全链路通过，failed 用"杀 mock"实测红卡+Network Error+重置恢复。★盲区：引擎错误码查表分支 mock 不可达，留待联调回归（同 3.6） |
+  | 4.6 | └─ 浏览器自测一遍 | 0.2 | ✅ | mock `--delay 4` 闭环自测通过：提交→百分比递增→日志滚动→done 出摘要（目标值+耗时）；切 /config 3 秒内 /api/task 新请求 0 个（卸载停轮询成立）；切回状态不丢；console 无 error（第 4 步 6/6 完） |
   | 5 | 结果总览（KPI 卡片） | 0.5 | ●○○ | |
   | 6 | **列车运行动画** | **3.0** | **●●●** | ★ **最难的一项**，见 §3 |
   | 7 | 时空图 + 客流 vs 运力 + 满载率热力图 | 3.0 | ●●○ | 三个图各 1 天 |
