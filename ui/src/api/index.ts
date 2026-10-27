@@ -20,6 +20,10 @@ export const api = {
   errors() {
     return http.get<Record<string, string>>('/api/meta/errors')
   },
+  /** 求解可用参数元信息（v2 新增） */
+  metaParams() {
+    return http.get<any>('/api/meta/params')
+  },
   /** 建任务 → { task_id } */
   solve(payload: any) {
     return http.post<{ task_id: string }>('/api/solve', payload)

@@ -1,5 +1,7 @@
 ﻿# Mock 后端使用说明
 
+> ==**v2（2026-10-16）**：修了 `compare()` 静默返回 0 与 `sweep()` 忽略 `case` 两个 bug；`param` 明确五值枚举；新增 `/api/meta/params`；任务状态分层==。
+
 零依赖，只用 Python 标准库。
 
 ## 启动

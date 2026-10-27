@@ -44,6 +44,11 @@ export const useSolveStore = defineStore('solve', () => {
   const timeseries = ref<Record<string, any> | null>(null)
   const solver = ref<Record<string, any> | null>(null)
   const paramsUsed = ref<Record<string, any> | null>(null)
+  const caseId = ref<string>('')
+  /** v2：求解结果态（optimal/infeasible/timeout/failed），替代旧 status_detail */
+  const resultStatus = ref<string>('')
+  /** v2：任务级配置校验结果 {pass, items:[{code,name,pass,detail}]} */
+  const validate = ref<Record<string, any> | null>(null)
   /** failed 时引擎返回的 messages（契约：{status:"failed", messages:[...]}） */
   const messages = ref<string[]>([])
 
@@ -99,9 +104,14 @@ export const useSolveStore = defineStore('solve', () => {
       timeseries.value = d.timeseries ?? null
       solver.value = d.solver ?? null
       paramsUsed.value = d.params_used ?? null
+      caseId.value = d.case_id ?? caseId.value
+      resultStatus.value = d.result_status ?? ''
+      validate.value = d.validate ?? null
     } else if (d.status === 'failed') {
       status.value = 'failed'
       messages.value = Array.isArray(d.messages) ? d.messages : []
+      resultStatus.value = d.result_status ?? ''
+      validate.value = d.validate ?? null
     }
   }
 
@@ -158,6 +168,9 @@ export const useSolveStore = defineStore('solve', () => {
     timeseries.value = null
     solver.value = null
     paramsUsed.value = null
+    caseId.value = ''
+    resultStatus.value = ''
+    validate.value = null
     messages.value = []
   }
 
@@ -183,6 +196,9 @@ export const useSolveStore = defineStore('solve', () => {
     timeseries,
     solver,
     paramsUsed,
+    caseId,
+    resultStatus,
+    validate,
     messages,
     lastParams,
     isRunning,

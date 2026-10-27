@@ -66,10 +66,7 @@ const report = ref<{
 } | null>(null)
 const submitting = ref(false)
 
-/** 错误项里的 field 是点分 key，用 schema 的 label 还原成人话 */
-function labelOf(key: string): string {
-  return store.fields.find((f) => f.key === key)?.label ?? key
-}
+/** 错误项：v2 契约 item 形态 {code, name, pass, detail}，无 field 字段 */
 
 /**
  * 校验配置。两关：① 本地必填（快速反馈，挡在提交前）→ ② 引擎判定（权威）。
@@ -100,11 +97,11 @@ async function onValidate() {
     const res = await api.validate({ config: store.toPayload() })
     const data = (res.data ?? {}) as {
       pass?: boolean
-      items?: Array<{ field?: string; code?: string }>
+      items?: Array<{ name?: string; code?: string; pass?: boolean; detail?: string }>
     }
     const items = (data.items ?? []).map((it) => {
       const code = it.code ?? ''
-      return { label: labelOf(it.field ?? ''), code, text: store.errorText(code) }
+      return { label: it.name ?? '', code, text: it.detail ?? store.errorText(code) }
     })
     const pass = !!data.pass && items.length === 0
     report.value = {

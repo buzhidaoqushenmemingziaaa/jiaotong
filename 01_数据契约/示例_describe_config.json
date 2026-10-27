@@ -1,5 +1,39 @@
 {
+  "version": "v1.3",
   "groups": [
+    {
+      "id": "meta",
+      "title": "算例信息",
+      "fields": [
+        {
+          "key": "meta.case_id",
+          "label": "算例编号",
+          "type": "str",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "如 SZ14"
+        },
+        {
+          "key": "meta.line_name",
+          "label": "线路名称",
+          "type": "str",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "如 深圳地铁14号线"
+        },
+        {
+          "key": "meta.city",
+          "label": "城市",
+          "type": "str",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": ""
+        }
+      ]
+    },
     {
       "id": "line",
       "title": "接口一：线路参数",
@@ -8,7 +42,127 @@
           "key": "line.stations",
           "label": "车站列表",
           "type": "list[str]",
-          "required": true
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "按上下行顺序，1 起"
+        },
+        {
+          "key": "line.total_length_km",
+          "label": "线路全长",
+          "type": "float",
+          "unit": "km",
+          "required": true,
+          "editable": true,
+          "doc": ""
+        },
+        {
+          "key": "line.capacity_pax",
+          "label": "列车定员",
+          "type": "float",
+          "unit": "人",
+          "required": true,
+          "editable": true,
+          "doc": "按站立密度 6 人/m²"
+        },
+        {
+          "key": "line.capacity_max_pax",
+          "label": "最大载客量",
+          "type": "float",
+          "unit": "人",
+          "required": true,
+          "editable": true,
+          "doc": "按站立密度 9 人/m²"
+        },
+        {
+          "key": "line.min_headway_s.shared",
+          "label": "最小追踪间隔（共线段）",
+          "type": "float",
+          "unit": "s",
+          "required": true,
+          "editable": true,
+          "doc": "适用 shared_sections 列出的区段"
+        },
+        {
+          "key": "line.min_headway_s.exclusive",
+          "label": "最小追踪间隔（非共线段）",
+          "type": "float",
+          "unit": "s",
+          "required": true,
+          "editable": true,
+          "doc": ""
+        },
+        {
+          "key": "line.min_headway_s.shared_sections",
+          "label": "共线段区段号",
+          "type": "list[int]",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "★ 必须显式列出，不许由叠加交路数推导"
+        },
+        {
+          "key": "line.section_length_km",
+          "label": "逐区间长度",
+          "type": "list[float]",
+          "unit": "km",
+          "required": true,
+          "editable": true,
+          "doc": ""
+        },
+        {
+          "key": "line.run_time_min",
+          "label": "逐区间运行时分",
+          "type": "list[float]",
+          "unit": "min",
+          "required": true,
+          "editable": true,
+          "doc": ""
+        }
+      ]
+    },
+    {
+      "id": "routings",
+      "title": "接口二：交路体系",
+      "fields": [
+        {
+          "key": "routings",
+          "label": "交路列表",
+          "type": "list[object]",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "每项含 id/origin/terminus/cycle_time_min"
+        }
+      ]
+    },
+    {
+      "id": "turnbacks",
+      "title": "接口二：折返条件",
+      "fields": [
+        {
+          "key": "turnbacks",
+          "label": "折返站列表",
+          "type": "list[object]",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "每项含 station/min_time_s/capacity_tph/tracks"
+        }
+      ]
+    },
+    {
+      "id": "depots",
+      "title": "接口三：车场参数",
+      "fields": [
+        {
+          "key": "depots",
+          "label": "车场列表",
+          "type": "list[object]",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "每项含 id/fleet_size/u_max_tph/tau_steps/lead_tracks"
         }
       ]
     },
@@ -17,17 +171,289 @@
       "title": "接口四：运营与场景参数",
       "fields": [
         {
-          "key": "scenario.horizon_steps",
-          "label": "时段步数",
-          "type": "int",
-          "required": true
+          "key": "scenario.decision_period_min",
+          "label": "决策周期 Δ",
+          "type": "float",
+          "unit": "min",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 15
         },
         {
-          "key": "scenario.decision_period_min",
-          "label": "决策周期(min)",
+          "key": "scenario.horizon_steps",
+          "label": "时段总数 |T|",
           "type": "int",
+          "unit": "—",
           "required": true,
-          "default": 15
+          "editable": true,
+          "doc": "",
+          "default": 16
+        },
+        {
+          "key": "scenario.peaks",
+          "label": "峰列表",
+          "type": "list[str]",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "morning / evening，两峰独立建模"
+        },
+        {
+          "key": "scenario.model_peaks_independently",
+          "label": "两峰独立建模",
+          "type": "bool",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": true
+        },
+        {
+          "key": "scenario.min_routing_hold_steps",
+          "label": "交路最小保持 Δ_min",
+          "type": "int",
+          "unit": "步",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 4
+        },
+        {
+          "key": "scenario.min_fleet_per_routing",
+          "label": "交路最小车底 a_min",
+          "type": "int",
+          "unit": "列",
+          "required": true,
+          "editable": true,
+          "doc": "★ 取 2：官方四联只配 2 列",
+          "default": 2
+        },
+        {
+          "key": "scenario.max_fleet_total",
+          "label": "在线总数上限 a_max",
+          "type": "int",
+          "unit": "列",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 44
+        },
+        {
+          "key": "scenario.fleet_step",
+          "label": "车底档位步长 g",
+          "type": "int",
+          "unit": "列",
+          "required": true,
+          "editable": true,
+          "doc": "★ 取 1；取 2 会排除奇数配置",
+          "default": 1
+        },
+        {
+          "key": "scenario.reprep_steps",
+          "label": "回段整备再上线 t_reprep",
+          "type": "int",
+          "unit": "步",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 0
+        },
+        {
+          "key": "scenario.b_init_total",
+          "label": "初始待班合计",
+          "type": "int",
+          "unit": "列",
+          "required": false,
+          "editable": true,
+          "doc": "★ 必须取小值；近满库会让时滞约束失效",
+          "default": 5
+        },
+        {
+          "key": "scenario.crowding_rho_lower",
+          "label": "拥挤断点 ρ₁",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 1.0
+        },
+        {
+          "key": "scenario.crowding_rho_upper",
+          "label": "拥挤断点 ρ₂",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 1.394
+        },
+        {
+          "key": "scenario.weights.alpha",
+          "label": "等待权重 α",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 0.35
+        },
+        {
+          "key": "scenario.weights.beta1",
+          "label": "拥挤权重 β₁（超定员）",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 0.15
+        },
+        {
+          "key": "scenario.weights.beta2",
+          "label": "拥挤权重 β₂（超最大载客）",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 0.25
+        },
+        {
+          "key": "scenario.weights.gamma",
+          "label": "车公里权重 γ",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 0.15
+        },
+        {
+          "key": "scenario.weights.delta",
+          "label": "待班权重 δ",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 0.1
+        },
+        {
+          "key": "scenario.hold_cost",
+          "label": "单位待班成本 c_hold",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "★ 不可为 null；为 null 时求解前必须报错"
+        },
+        {
+          "key": "scenario.forecast_error_mape",
+          "label": "预测误差强度 η",
+          "type": "float",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 0.1
+        },
+        {
+          "key": "scenario.forecast_error_mode",
+          "label": "误差模式",
+          "type": "str",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": "per_cell_uniform",
+          "enum": [
+            "per_cell_uniform",
+            "curve_shift"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demand",
+      "title": "接口四：需求",
+      "fields": [
+        {
+          "key": "demand.source",
+          "label": "数据来源",
+          "type": "str",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": "synthetic",
+          "enum": [
+            "inline",
+            "csv",
+            "synthetic"
+          ]
+        },
+        {
+          "key": "demand.profile",
+          "label": "时间形状类型",
+          "type": "str",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": "trapezoid",
+          "enum": [
+            "trapezoid",
+            "observed"
+          ]
+        },
+        {
+          "key": "demand.profile_params.ramp_up_steps",
+          "label": "爬坡步数",
+          "type": "int",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 3
+        },
+        {
+          "key": "demand.profile_params.plateau_steps",
+          "label": "平台步数",
+          "type": "int",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 8
+        },
+        {
+          "key": "demand.profile_params.ramp_down_steps",
+          "label": "退坡步数",
+          "type": "int",
+          "unit": "—",
+          "required": true,
+          "editable": true,
+          "doc": "",
+          "default": 5
+        },
+        {
+          "key": "demand.section_flow_peak_pax_per_h",
+          "label": "各峰断面客流（峰值）",
+          "type": "dict[str, list[float]]",
+          "unit": "人/h",
+          "required": true,
+          "editable": true,
+          "doc": "按峰给 N−1 个断面"
+        },
+        {
+          "key": "demand.calibration",
+          "label": "数据来源说明",
+          "type": "str",
+          "unit": "—",
+          "required": false,
+          "editable": true,
+          "doc": ""
         }
       ]
     }

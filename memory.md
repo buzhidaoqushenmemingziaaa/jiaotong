@@ -1,7 +1,7 @@
 # 项目记忆（C 角色 · 前端开发）
 
 > 作用：给后续会话快速恢复上下文。看这一份就能开工。
-> 更新日期：2026-10-13
+> 更新日期：2026-10-16
 
 ---
 
@@ -179,3 +179,45 @@
 - 4.4完成：进度条+日志面板
 - 4.5完成：done摘要+failed查表（杀mock实测）
 - 4.6完成：求解页闭环自测（第4步6/6完）
+- 5完成：结果总览页KPI卡片+溯源（第5步1/1）
+- ★第5步发现契约不一致（已于 v2 定稿解决，见 §16）
+- v2契约修订要点已归档
+- v2文件已同步正式目录并实测通过
+- ★前端v2契约对齐：ResultsView cost_crowd拆crowd1/crowd2、solver variables/constraints、result_status优先读、costRows简化；solve.ts加resultStatus/validate；api补metaParams；Mock实测全部通过
+- ConfigView错误表item.field→item.name，validate面板ResultsView可折叠展示V1-V8校验详情
+- vue-tsc全量零错误，Mock回包11字段summary、result_status、solver6字段、validate全部对齐
+- ★第6步列车运行动画骨架完成：VisualizeView四Tab容器（时空图step堆叠+a_total红线验收硬标准、AnimCanvas近似位置动画精确在线数、客流vs运力/热力骨架占位）；vue-tsc零错误，浏览器5/5通过
+- 架构决策：viz_rail.py的reconstruct()依赖引擎Case对象（线路里程/交路周期Tcyc）不在timeseries里，前端暂用「聚合精确+位置近似」，联调时替换B返回的精确轨迹
+- AdvisorTool收尾：roundRect→fillRect兼容旧浏览器；三个算例硬编码线路拓扑（toyline A-F 6站、line14深圳18站）；routeColor hash公式修正；solve store加caseId字段
+
+---
+
+## 16 v2 契约修订（2026-10-17 负责人定稿，替代 §6.1/§6.2/§8 旧描述）
+
+来源：负责人回传的修订文件（修订说明_v2.md + C核对反馈_处理报告.md）。裁定原则：**改数据不改文档**（数据补齐对齐文档）。以下为开发唯一口径。
+
+> ✅ **2026-10-17 已将 v2 全部文件覆盖同步到正式目录**（01_数据契约/、02_设计文档/、04_Mock后端/、00_先读C.md、C工期估算.md，新增 05_配套文件/；两份说明文档留在项目根），Mock 已重启并实测：result_status=optimal、summary 11 字段、cost_terms *_raw、solver.variables/constraints、/api/meta/params 全部生效。轨道交通v2 临时文件夹可删。
+
+**两个反馈问题的裁定**
+- `summary` 定 **11 字段**：objective / cost_wait（单位定 **人·h**）/ **cost_crowd1 / cost_crowd2**（原 cost_crowd 拆成超定员、超最大载客两项）/ cost_km / cost_hold / total_wakeups / max_standby / structure_changes / **peak_online**（原契约外野字段，正式入契）/ solve_time_s
+- `cost_terms` 键定稿：`wait_raw / crowd1_raw / crowd2_raw / km_raw / hold_raw`
+
+**其他契约变更**
+- `solver` 6 字段：name / status / gap / **variables / constraints**（旧 nvars/ncons 作废）/ runtime_s
+- `timeseries`：`s` 明确为 dict{did}（不是 list）；新增 `q_true`（真实客流，给「预测 vs 真实」图）
+- 任务回包：`status_detail` → **`result_status`**（求解结果态读它，不写 `?? status` 回退）；task 回包新增 validate
+- **新增端点** `GET /api/meta/params`；无端点删除，所有路径与请求体不变（/api/solve、task/{id}、series 等照旧）
+- mock 修两 bug：compare 不再静默返 0（回包 `{case, base_variant, rows:[{variant_id, *_raw, objective, peak_online, relative_pct}]}`）；sweep 的 case 参数生效，新增 param_label/x_unit，非法 param 返 E4001
+- describe_config：2 组 3 字段 → **7 组 42 字段**；新类型 `list[object]`、`dict[str,list[float]]`（fieldTypes 无映射，走只读兜底）
+- describe_errors：改为 **13 个错误码 E1001~E4001**（旧 3 码作废）
+- validate item 形态 `{code, name, pass, detail}`（无 field 字段）
+- health 加 version、cases 加 peak_online（纯增量）
+
+**前端待改（继续开发时先做）**
+1. ~~ResultsView：cost_crowd 卡拆成 cost_crowd1/cost_crowd2 两张；solver 的 nvars/ncons 改读 variables/constraints~~ ✅已完成 2026-10-27（含 result_status 优先读、costRows 简化为 *_raw、solver 补 status/gap/runtime_s、solve.ts 加 resultStatus/validate、api 补 metaParams）
+2. ~~ConfigView 错误表：字段名列从 item.field 改读 item.name~~ ✅已完成 2026-10-27（validate 面板 ResultsView 可折叠展示）
+3. 第 8 步 compare/sweep 开工时直接按新回包字段写（variant_id / *_raw / param_label / x_unit）
+
+**遗留待向负责人确认**
+- 接口契约 §4 顶层 status 枚举仍只写 optimal/infeasible/timeout，漏 schema 说明里的 "failed"
+- 环境：Python 3.13.5；PuLP 必须钉 **3.3.2**（4.0.0 wheel 不含 CBC）；Windows 读写显式 encoding=utf-8
