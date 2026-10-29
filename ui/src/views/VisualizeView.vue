@@ -6,7 +6,7 @@
  * ★ 数据策略：聚合精确 + 位置近似（见 AnimCanvas.vue 注释）
  * ★ 验收硬标准：动画在线车底数与 timeseries.a_total 一致（memory.md §11）
  */
-import { computed, ref, watch, nextTick, shallowRef, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, nextTick, shallowRef, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import * as echarts from 'echarts/core'
 import { LineChart, BarChart, HeatmapChart } from 'echarts/charts'
@@ -212,7 +212,16 @@ function ensureCharts() {
   if (elSpace && !chartSpace.value) chartSpace.value = echarts.init(elSpace)
 }
 
-watch([activeTab, hasResult], () => {
+watch([activeTab, hasResult, timeseries], () => {
+  nextTick(() => {
+    if (!hasResult.value) return
+    ensureCharts()
+    if (activeTab.value === 'space') renderSpaceTime()
+  })
+})
+
+/** 兜底：组件挂载后强制初始化（解决"先求解再进可视化页"时 watch 不触发的问题） */
+onMounted(() => {
   nextTick(() => {
     if (!hasResult.value) return
     ensureCharts()
@@ -239,6 +248,16 @@ let animTimer: number | null = null
 
 function startAnim() {
   if (!hasResult.value || animPlaying.value) return
+  // Tab 门禁：el-tab-pane 默认 v-if 懒渲染，动画 Tab 未激活时 AnimCanvas 组件还没挂载
+  // 如果此时启动 tickAnim，step/subframe 在变但没人在 watch 画 → 用户点播放没反应
+  if (activeTab.value !== 'anim') {
+    activeTab.value = 'anim'
+    nextTick(() => {
+      animPlaying.value = true
+      tickAnim()
+    })
+    return
+  }
   animPlaying.value = true
   tickAnim()
 }

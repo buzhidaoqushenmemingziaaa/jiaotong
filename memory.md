@@ -189,7 +189,10 @@
 - ★第6步列车运行动画骨架完成：VisualizeView四Tab容器（时空图step堆叠+a_total红线验收硬标准、AnimCanvas近似位置动画精确在线数、客流vs运力/热力骨架占位）；vue-tsc零错误，浏览器5/5通过
 - 架构决策：viz_rail.py的reconstruct()依赖引擎Case对象（线路里程/交路周期Tcyc）不在timeseries里，前端暂用「聚合精确+位置近似」，联调时替换B返回的精确轨迹
 - AdvisorTool收尾：roundRect→fillRect兼容旧浏览器；三个算例硬编码线路拓扑（toyline A-F 6站、line14深圳18站）；routeColor hash公式修正；solve store加caseId字段
-
+第6步bug修复：
+-watch 增加 timeseries 依赖：时空图白屏 —— 从"先求解再进可视化"的路径进来时 watch 完全不跑，ECharts 实例从未初始化。
+-加 onMounted： 不管用户怎么进入 VisualizeView，只要组件挂载了就保证`ensureCharts()` 和`renderSpaceTime()` 至少跑一次。
+-动画按钮加组件存活门禁：点播放没反应 —— 动画逻辑在跑但渲染组件不存在
 ---
 
 ## 16 v2 契约修订（2026-10-17 负责人定稿，替代 §6.1/§6.2/§8 旧描述）
