@@ -24,6 +24,7 @@ import { VideoPlay, VideoPause, RefreshLeft } from '@element-plus/icons-vue'
 import { useSolveStore } from '@/stores/solve'
 import { useConfigStore } from '@/stores/config'
 import AnimCanvas from '@/components/visualize/AnimCanvas.vue'
+import { buildTimetable, type RoutingSpec, type TimetableRoute } from '@/components/visualize/timetable'
 
 echarts.use([
   LineChart,
@@ -55,15 +56,46 @@ const TOPOLOGY_HINTS: Record<string, { stations: string[]; sectionLenKm: number[
   },
 }
 
+/**
+ * 交路兜底表（config.routings 缺失时用，联调后由引擎配置接管）
+ * 来源：示例结果 validate 的 V1「覆盖区段数」/ V3「周期 T=…」+ F 区段流差分实测
+ *   toyline：r0 A–F 5 段 T=32；r1 A–D 3 段 T=22
+ *   line14 ：r0 沙田–福保 17 段 T=116；r1 沙田–市民中心 10 段 T=76；r2 沙田–同乐 6 段 T=50
+ */
+const ROUTING_HINTS: Record<string, RoutingSpec[]> = {
+  toyline_morning: [
+    { id: 'r0', origin: 1, terminus: 6, cycleMin: 32 },
+    { id: 'r1', origin: 1, terminus: 4, cycleMin: 22 },
+  ],
+  line14_morning: [
+    { id: 'r0', origin: 1, terminus: 18, cycleMin: 116 },
+    { id: 'r1', origin: 1, terminus: 11, cycleMin: 76 },
+    { id: 'r2', origin: 1, terminus: 7, cycleMin: 50 },
+  ],
+  line14_evening: [
+    { id: 'r0', origin: 1, terminus: 18, cycleMin: 116 },
+    { id: 'r1', origin: 1, terminus: 11, cycleMin: 76 },
+    { id: 'r2', origin: 1, terminus: 7, cycleMin: 50 },
+  ],
+}
+
 const store = useSolveStore()
 const configStore = useConfigStore()
 const { summary, timeseries, caseId } = storeToRefs(store)
 const { config: cfg } = storeToRefs(configStore)
 
 const chartSpace = shallowRef<echarts.ECharts>()
+const chartLoad = shallowRef<echarts.ECharts>()
 
 const activeTab = ref('space')
 const hasResult = computed(() => summary.value != null && timeseries.value != null)
+
+/**
+ * 算例兜底表的键：优先用本次提交的算例 id（lastParams.case）。
+ * ★ /api/task 回包没有 case_id（只有 result_status/summary/timeseries…），
+ *   store.caseId 因此一直为空，直接拿它查表会查不到 → 运行图为空。
+ */
+const hintKey = computed<string>(() => store.lastParams?.case || caseId.value)
 
 // ---------- 数据准备 ----------
 
@@ -88,7 +120,7 @@ const topology = computed(() => {
   let sectionLen = (L.section_length_km as number[]) ?? []
 
   // 2. 算例硬编码兜底
-  const hint = TOPOLOGY_HINTS[caseId.value]
+  const hint = TOPOLOGY_HINTS[hintKey.value]
   if ((stations.length === 0 || sectionLen.length === 0) && hint) {
     stations = stations.length > 0 ? stations : hint.stations
     sectionLen = sectionLen.length > 0 ? sectionLen : hint.sectionLenKm
@@ -143,17 +175,169 @@ const rho2 = computed<number>(() => {
   return typeof s === 'number' && s > 0 ? s : 1.394
 })
 
-// ---------- Tab 1：时空图 ----------
+// ---------- Tab 1：时空图（运行图） ----------
+
+/** 交路定义：config.routings 优先，缺失时用算例兜底表，且只保留 a 里真实存在的交路 */
+const routingSpecs = computed<RoutingSpec[]>(() => {
+  const arr = (cfg.value?.routings as any[]) ?? []
+  const fromCfg = Array.isArray(arr)
+    ? arr
+        .filter(
+          (r) =>
+            r &&
+            typeof r.id === 'string' &&
+            typeof r.origin === 'number' &&
+            typeof r.terminus === 'number' &&
+            typeof r.cycle_time_min === 'number' &&
+            r.cycle_time_min > 0,
+        )
+        .map((r) => ({
+          id: r.id as string,
+          origin: r.origin as number,
+          terminus: r.terminus as number,
+          cycleMin: r.cycle_time_min as number,
+          name: typeof r.name === 'string' ? r.name : undefined,
+        }))
+    : []
+  const specs = fromCfg.length > 0 ? fromCfg : (ROUTING_HINTS[hintKey.value] ?? [])
+  return specs.filter((r) => Object.prototype.hasOwnProperty.call(ts.value.a ?? {}, r.id))
+})
+
+/** 逐区间纯运行时分（config 有则用，用于精确斜率；缺失时按里程摊） */
+const sectionRunMin = computed<number[] | undefined>(() => {
+  const v = (cfg.value?.line as Record<string, unknown>)?.run_time_min
+  return Array.isArray(v) && v.every((x) => typeof x === 'number' && x > 0)
+    ? (v as number[])
+    : undefined
+})
+
+const timetable = computed(() =>
+  buildTimetable({
+    routes: routingSpecs.value,
+    a: (ts.value.a ?? {}) as Record<string, number[]>,
+    T: T.value,
+    dtMin: dtMin.value,
+    topo: topology.value,
+    sectionRunMin: sectionRunMin.value,
+  }),
+)
+
+/** 图例名：契约里的 routing.name 优先，否则「rid 起点→终点」 */
+function legendName(r: TimetableRoute): string {
+  if (r.name) return r.name
+  const a = topology.value.stations[r.origin - 1] ?? `S${r.origin}`
+  const b = topology.value.stations[r.terminus - 1] ?? `S${r.terminus}`
+  return `${r.id} ${a}→${b}`
+}
+
+/** 分钟数（自 06:00 起）→ "HH:MM" */
+function minLabel(min: number): string {
+  const m = Math.round(Math.max(0, min)) + startHour * 60
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+}
+
+/** 当前播放时刻（min），用于运行图上的"现在"竖线 —— 与动画 Tab 共用 animStep */
+const nowMin = computed(
+  () => animStep.value * dtMin.value + (animSubframe.value / animSubframes) * dtMin.value,
+)
+
+function nowLineSeries(): any {
+  const n = Math.max(1, topology.value.stations.length)
+  return {
+    id: 'nowline',
+    name: '当前时刻',
+    type: 'line',
+    silent: true,
+    tooltip: { show: false },
+    showSymbol: false,
+    data: [
+      [nowMin.value, 0],
+      [nowMin.value, n - 1],
+    ],
+    lineStyle: { color: '#dc2626', width: 1.5, type: 'dashed' },
+    z: 10,
+  }
+}
 
 function renderSpaceTime() {
   if (!hasResult.value || !chartSpace.value) return
+
+  const stations = topology.value.stations
+  const yLabels = stations.map((s, i) => `${i + 1} ${s}`)
+  const totalMin = T.value * dtMin.value
+  const tm = timetable.value
+  const nameOf = new Map<string, string>()
+  for (const r of tm.routes) nameOf.set(r.id, legendName(r))
+
+  // 每条斜线 = 一列车一个往返（去程 + 折返停时 + 回程），null 断开两段
+  const series: any[] = tm.trips.map((trip) => ({
+    id: `${trip.rid}-${trip.seq}`,
+    name: nameOf.get(trip.rid) ?? trip.rid,
+    type: 'line',
+    data: [...trip.out, null, ...trip.back],
+    connectNulls: false,
+    showSymbol: false,
+    lineStyle: { width: 1.1, color: routeColor(trip.rid), opacity: 0.8 },
+    itemStyle: { color: routeColor(trip.rid) },
+    emphasis: { focus: 'series', lineStyle: { width: 2.2 } },
+    z: 2,
+  }))
+  series.push(nowLineSeries())
+
+  const opt: EChartsCoreOption = {
+    title: tm.trips.length === 0
+      ? { text: '当前结果没有在线车底，无法还原运行图', left: 'center', top: 'middle', textStyle: { fontSize: 14, color: '#909399', fontWeight: 'normal' } }
+      : undefined,
+    tooltip: {
+      trigger: 'item',
+      formatter: (p: any) => {
+        const v = p.value
+        if (!Array.isArray(v) || v.length < 2) return ''
+        const idx = Math.round(v[1])
+        return `${p.marker} ${p.seriesName}<br/>时刻 <b>${minLabel(v[0])}</b><br/>车站 ${yLabels[idx] ?? ''}`
+      },
+    },
+    legend: {
+      top: 0,
+      data: tm.routes.map((r) => legendName(r)),
+      textStyle: { fontSize: 11 },
+    },
+    grid: { left: 96, right: 30, top: 36, bottom: 58 },
+    xAxis: {
+      type: 'value',
+      min: 0,
+      max: totalMin,
+      name: '时刻',
+      nameLocation: 'middle',
+      nameGap: 28,
+      axisLabel: { fontSize: 11, formatter: (v: number) => minLabel(v) },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: 'category',
+      data: yLabels,
+      inverse: false,
+      axisLabel: { fontSize: 10, interval: 0, margin: 8 },
+      axisTick: { show: false },
+      splitLine: { show: true, lineStyle: { color: '#f2f3f5' } },
+    },
+    dataZoom: [
+      { type: 'inside', xAxisIndex: 0, filterMode: 'none' },
+      { type: 'slider', xAxisIndex: 0, height: 18, bottom: 8, filterMode: 'none' },
+    ],
+    series,
+  }
+  chartSpace.value.setOption(opt, true)
+}
+
+/** 在线车底校核副图（原 step 堆叠 + a_total 红线，验收硬标准用） */
+function renderLoadChart() {
+  if (!hasResult.value || !chartLoad.value) return
   const a = ts.value.a as Record<string, number[]>
   const aTotal = ts.value.a_total as number[]
   if (!aTotal || aTotal.length === 0) return
 
-  const tIdx = Array.from({ length: T.value }, (_, i) => i + 1)
-  const xLabels = tIdx.map(timeLabel)
-
+  const xLabels = Array.from({ length: T.value }, (_, i) => timeLabel(i + 1))
   const seriesStacked: any[] = routeIds.value.map((rid) => ({
     name: rid,
     type: 'line',
@@ -183,11 +367,11 @@ function renderSpaceTime() {
         return html
       },
     },
-    legend: { top: 0 },
-    grid: { left: 55, right: 30, top: 40, bottom: 50 },
-    xAxis: { type: 'category', data: xLabels, name: '时刻', nameLocation: 'middle', nameGap: 30, axisLabel: { fontSize: 11 } },
-    yAxis: { type: 'value', name: '在线车底（列）', minInterval: 1, axisLabel: { fontSize: 11 } },
-    dataZoom: [{ type: 'inside' }, { type: 'slider', height: 20, bottom: 6 }],
+    legend: { top: 0, textStyle: { fontSize: 11 } },
+    grid: { left: 55, right: 30, top: 32, bottom: 34 },
+    xAxis: { type: 'category', data: xLabels, axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value', name: '在线车底（列）', nameGap: 16, minInterval: 1, axisLabel: { fontSize: 10 } },
+    dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 4 }],
     series: [
       ...seriesStacked,
       {
@@ -202,7 +386,7 @@ function renderSpaceTime() {
       },
     ],
   }
-  chartSpace.value.setOption(opt, true)
+  chartLoad.value.setOption(opt, true)
 }
 
 // ---------- 生命周期 ----------
@@ -210,32 +394,36 @@ function renderSpaceTime() {
 function ensureCharts() {
   const elSpace = document.getElementById('chart-space')
   if (elSpace && !chartSpace.value) chartSpace.value = echarts.init(elSpace)
+  const elLoad = document.getElementById('chart-load')
+  if (elLoad && !chartLoad.value) chartLoad.value = echarts.init(elLoad)
 }
 
-watch([activeTab, hasResult, timeseries], () => {
-  nextTick(() => {
-    if (!hasResult.value) return
-    ensureCharts()
-    if (activeTab.value === 'space') renderSpaceTime()
-  })
+function renderVisibleTab() {
+  if (!hasResult.value) return
+  ensureCharts()
+  if (activeTab.value !== 'space') return
+  renderSpaceTime()
+  renderLoadChart()
+}
+
+watch([activeTab, hasResult, timeseries, timetable, topology], () => {
+  nextTick(renderVisibleTab)
 })
 
 /** 兜底：组件挂载后强制初始化（解决"先求解再进可视化页"时 watch 不触发的问题） */
 onMounted(() => {
-  nextTick(() => {
-    if (!hasResult.value) return
-    ensureCharts()
-    if (activeTab.value === 'space') renderSpaceTime()
-  })
+  nextTick(renderVisibleTab)
 })
 
 function onResize() {
   chartSpace.value?.resize()
+  chartLoad.value?.resize()
 }
 window.addEventListener('resize', onResize)
 onUnmounted(() => {
   window.removeEventListener('resize', onResize)
   chartSpace.value?.dispose()
+  chartLoad.value?.dispose()
 })
 
 // ---------- Tab 2：动画控制 ----------
@@ -286,6 +474,12 @@ function tickAnim() {
   }
   animTimer = window.setTimeout(tickAnim, 120)
 }
+
+/** 运行图上的"当前时刻"竖线随动画播放移动（只更新这一条 series，不重绘整图） */
+watch([animStep, animSubframe], () => {
+  if (activeTab.value !== 'space' || !chartSpace.value || !hasResult.value) return
+  chartSpace.value.setOption({ series: [nowLineSeries()] })
+})
 </script>
 
 <template>
@@ -321,12 +515,20 @@ function tickAnim() {
       </div>
 
       <el-tabs v-model="activeTab" type="border-card">
-        <!-- Tab 1：时空图 -->
-        <el-tab-pane label="时空图（在线车底轨迹）" name="space">
-          <div id="chart-space" class="echart-box" />
+        <!-- Tab 1：时空图（运行图） -->
+        <el-tab-pane label="时空图（运行图）" name="space">
+          <div class="st-hint">
+            横轴时刻、纵轴车站；<b>每条斜线 = 一列车一个往返</b>（上行、折返停时、下行），
+            颜色区分交路，红色虚线 = 当前播放时刻。
+          </div>
+          <div id="chart-space" class="echart-box st-box" />
+          <div class="sub-title">在线车底校核（红色 a_total 与后端 timeseries 精确一致）</div>
+          <div id="chart-load" class="echart-box load-box" />
           <div class="tab-note">
-            <b>验收硬标准</b>：红色粗线 = a_total 在线车底数（与后端 timeseries 精确一致）。
-            各交路分段 = 堆叠 step 曲线，面积代表各时刻各交路在线规模。
+            运行图由 <b>timeseries.a(t) + 交路周期 T_r</b> 还原（同 viz_rail.reconstruct 积分法），
+            每趟车只跑一个往返、跑完交给下一趟 —— 不得无限循环，否则在途数虚高。
+            单程时间优先取配置的逐区间运行时分，缺失时按里程摊；交路覆盖与周期取自 config.routings，
+            缺失时用算例兜底表（联调后由 B 引擎配置接管）。
           </div>
         </el-tab-pane>
 
@@ -396,6 +598,23 @@ function tickAnim() {
 .echart-box {
   width: 100%;
   height: 420px;
+}
+.st-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.st-box {
+  height: 480px;
+}
+.sub-title {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+}
+.load-box {
+  height: 190px;
 }
 .tab-note {
   margin-top: 10px;
